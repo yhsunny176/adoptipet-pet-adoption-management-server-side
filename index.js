@@ -102,6 +102,13 @@ async function run() {
             res.send(result);
         });
 
+        // API endpoint for Adding a pet
+        app.post("/add-pet", verifyToken, async (req, res) => {
+          const pet = req.body;
+          const result = await petCollection.insertOne(pet);
+          res.send(result);
+        })
+
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
         // console.log("Successfully connected to MongoDB!");
