@@ -1,6 +1,6 @@
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-require("dotenv").config();
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
@@ -49,6 +49,7 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         const db = client.db("AdoptiPetDB");
+        const userInfo = db.collection("users");
         const petCollection = db.collection("allpets");
 
         //generate jwt
