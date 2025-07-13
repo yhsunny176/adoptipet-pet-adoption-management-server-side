@@ -18,7 +18,6 @@ app.use(cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json());
 
-
 const uri = process.env.MONGODB_URI;
 
 const verifyToken = async (req, res, next) => {
@@ -49,8 +48,8 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         const db = client.db("AdoptiPetDB");
-        const userInfo = db.collection("users");
-        const petCollection = db.collection("allpets");
+        const usersCollection = db.collection("users");
+        const petCollection = db.collection("allPets");
 
         //generate jwt
         app.post("/jwt", (req, res) => {
@@ -81,9 +80,31 @@ async function run() {
             }
         });
 
+        // save or update a users info in db
+        app.post("/user", async (req, res) => {
+            const userData = req.body;
+            userData.role = "user";
+            userData.created_at = new Date().toISOString();
+            userData.last_loggedIn = new Date().toISOString();
+            const query = {
+                email: userData?.email,
+            };
+            const userExists = await usersCollection.findOne(query);
+
+            if (!!userExists) {
+                const result = await usersCollection.updateOne(query, {
+                    $set: { last_loggedIn: new Date().toISOString() },
+                });
+                return res.send(result);
+            }
+
+            const result = await usersCollection.insertOne(userData);
+            res.send(result);
+        });
+
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
-        console.log("Successfully connected to MongoDB!");
+        // await client.db("admin").command({ ping: 1 });
+        // console.log("Successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
     }
