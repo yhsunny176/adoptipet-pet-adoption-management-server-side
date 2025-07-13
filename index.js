@@ -3,6 +3,7 @@ const cors = require("cors");
 require("dotenv").config();
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -14,10 +15,27 @@ const corsOptions = {
     optionSuccessStatus: 200,
 };
 app.use(cors(corsOptions));
-
+app.use(cookieParser());
 app.use(express.json());
 
+
 const uri = process.env.MONGODB_URI;
+
+const verifyToken = async (req, res, next) => {
+    const token = req.cookies?.token;
+
+    if (!token) {
+        return res.status(401).send({ message: "unauthorized access" });
+    }
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+        if (err) {
+            console.log(err);
+            return res.status(401).send({ message: "unauthorized access" });
+        }
+        req.user = decoded;
+        next();
+    });
+};
 
 // MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
