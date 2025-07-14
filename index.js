@@ -10,7 +10,7 @@ const port = process.env.PORT || 5000;
 
 // Middleware
 const corsOptions = {
-    origin: ["http://localhost:5173", "http://localhost:5174"],
+    origin: ["http://localhost:5173", "http://localhost:5174", "https://adoptipet.web.app"],
     credentials: true,
     optionSuccessStatus: 200,
 };
@@ -110,10 +110,30 @@ async function run() {
             res.send(result);
         });
 
-        //GET API endpoint for Retrieving All pets
+        // GET API endpoint for Retrieving All pets with pagination
         app.get("/all-pets", async (req, res) => {
-            const result = await petCollection.find().toArray();
-            res.send(result);
+            // Parse query params for pagination
+            const pageSize = Number.parseInt(req.query.limit) || 6;
+            const cursor = Number.parseInt(req.query.cursor) || 0;
+
+            // Only count and fetch non-adopted pets
+            const filter = { adopted: false };
+            const total = await petCollection.countDocuments(filter);
+            const adjustedCursor = cursor >= total ? Math.max(total - pageSize, 0) : cursor;
+
+            // Fetch paginated non-adopted pets
+            const pets = await petCollection.find(filter).skip(adjustedCursor).limit(pageSize).toArray();
+
+            // Calculate next and previous cursors
+            const nextId = adjustedCursor + pageSize < total ? adjustedCursor + pageSize : null;
+            const previousId = adjustedCursor - pageSize >= 0 ? adjustedCursor - pageSize : null;
+
+            res.send({
+                pets,
+                nextId,
+                previousId,
+                total,
+            });
         });
 
         // Send a ping to confirm a successful connection
