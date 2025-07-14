@@ -102,12 +102,19 @@ async function run() {
             res.send(result);
         });
 
-        // API endpoint for Adding a pet
+        // POST API endpoint for Adding a pet
         app.post("/add-pet", verifyToken, async (req, res) => {
-          const pet = req.body;
-          const result = await petCollection.insertOne(pet);
-          res.send(result);
-        })
+            const pet = req.body;
+            pet.created_at = new Date().toISOString();
+            const result = await petCollection.insertOne(pet);
+            res.send(result);
+        });
+
+        //GET API endpoint for Retrieving All pets
+        app.get("/all-pets", async (req, res) => {
+            const result = await petCollection.find().toArray();
+            res.send(result);
+        });
 
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
