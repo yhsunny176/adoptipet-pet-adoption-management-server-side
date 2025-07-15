@@ -110,29 +110,17 @@ async function run() {
             res.send(result);
         });
 
+        const paginateCollection = require("./utils/pagination__collection.js");
+
         // GET API endpoint for Retrieving All pets with pagination
         app.get("/all-pets", async (req, res) => {
-            // Parse query params for pagination
-            const pageSize = Number.parseInt(req.query.limit) || 6;
-            const cursor = Number.parseInt(req.query.cursor) || 0;
-
-            // Only count and fetch non-adopted pets
             const filter = { adopted: false };
-            const total = await petCollection.countDocuments(filter);
-            const adjustedCursor = cursor >= total ? Math.max(total - pageSize, 0) : cursor;
-
-            // Fetch paginated non-adopted pets
-            const pets = await petCollection.find(filter).skip(adjustedCursor).limit(pageSize).toArray();
-
-            // Calculate next and previous cursors
-            const nextId = adjustedCursor + pageSize < total ? adjustedCursor + pageSize : null;
-            const previousId = adjustedCursor - pageSize >= 0 ? adjustedCursor - pageSize : null;
-
+            const result = await paginateCollection({ collection: petCollection, req, filter });
             res.send({
-                pets,
-                nextId,
-                previousId,
-                total,
+                pets: result.items,
+                nextId: result.nextId,
+                previousId: result.previousId,
+                total: result.total,
             });
         });
 
