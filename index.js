@@ -115,6 +115,30 @@ async function run() {
         // GET API endpoint for Retrieving All pets with pagination
         app.get("/all-pets", async (req, res) => {
             const filter = { adopted: false };
+
+            const { category, search } = req.query;
+            if (category) {
+                const normalize = (str) => str?.toString().toLowerCase().replace(/\s|_/g, "").trim();
+                const catNorm = normalize(category);
+                filter.$expr = {
+                    $eq: [
+                        {
+                            $replaceAll: {
+                                input: {
+                                    $replaceAll: { input: { $toLower: "$category" }, find: "_", replacement: "" },
+                                },
+                                find: " ",
+                                replacement: "",
+                            },
+                        },
+                        catNorm,
+                    ],
+                };
+            }
+            if (search) {
+                filter.pet_name = { $regex: search, $options: "i" };
+            }
+
             const result = await paginateCollection({ collection: petCollection, req, filter });
             res.send({
                 pets: result.items,
@@ -122,6 +146,31 @@ async function run() {
                 previousId: result.previousId,
                 total: result.total,
             });
+        });
+
+        // GET API endpoint for pets by category
+        app.get("/category-pets", async (req, res) => {
+            const { category } = req.query;
+            if (!category) {
+                return res.status(400).send({ success: false, message: "Category is required" });
+            }
+            try {
+                // Use case-insensitive regex for category match
+                const filter = {
+                    category: { $regex: `^${category}$`, $options: "i" },
+                    adopted: false,
+                };
+
+                const result = await paginateCollection({ collection: petCollection, req, filter });
+                res.send({
+                    pets: result.items,
+                    nextId: result.nextId,
+                    previousId: result.previousId,
+                    total: result.total,
+                });
+            } catch (error) {
+                res.status(500).send({ success: false, message: "Failed to fetch pets", error: error.message });
+            }
         });
 
         // Send a ping to confirm a successful connection
