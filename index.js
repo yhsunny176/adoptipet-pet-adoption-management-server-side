@@ -238,6 +238,15 @@ async function run() {
             }
         });
 
+        // get all pet added by user using email
+        app.get("/dashboard/my-added-pets/:email", verifyToken, async (req, res) => {
+            const email = req.params.email;
+            console.log(email);
+            const filter = { "added_by.email": email };
+            const result = await petCollection.find(filter).toArray();
+            res.send(result);
+        });
+
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
         // console.log("Successfully connected to MongoDB!");
