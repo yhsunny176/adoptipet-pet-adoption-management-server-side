@@ -50,6 +50,7 @@ async function run() {
         const db = client.db("AdoptiPetDB");
         const usersCollection = db.collection("users");
         const petCollection = db.collection("allPets");
+        const adoptRequestsCollection = db.collection("adoptRequests");
 
         //generate jwt
         app.post("/jwt", (req, res) => {
@@ -148,6 +149,24 @@ async function run() {
             });
         });
 
+        // GET API endpoint for retrieving a single pet by ID
+        app.get("/pet-detail/:id", async (req, res) => {
+            const { id } = req.params;
+            const { ObjectId } = require("mongodb");
+            if (!ObjectId.isValid(id)) {
+                return res.status(400).send({ success: false, message: "Invalid pet ID" });
+            }
+            try {
+                const pet = await petCollection.findOne({ _id: new ObjectId(id) });
+                if (!pet) {
+                    return res.status(404).send({ success: false, message: "Pet not found" });
+                }
+                res.send(pet);
+            } catch (error) {
+                res.status(500).send({ success: false, message: "Failed to fetch pet", error: error.message });
+            }
+        });
+
         // GET API endpoint for pets by category
         app.get("/category-pets", async (req, res) => {
             const { category } = req.query;
@@ -170,6 +189,52 @@ async function run() {
                 });
             } catch (error) {
                 res.status(500).send({ success: false, message: "Failed to fetch pets", error: error.message });
+            }
+        });
+
+        // POST API endpoint for submitting an adoption request
+        app.post("/adopt-request", verifyToken, async (req, res) => {
+            const request = req.body;
+            if (!request.pet_id || !request.user_email) {
+                return res.status(400).send({ success: false, message: "pet_id and user_email are required" });
+            }
+            try {
+                request.requested_at = new Date().toISOString();
+                request.adopted = false;
+                const result = await adoptRequestsCollection.insertOne(request);
+                res.send({ success: true, result });
+            } catch (error) {
+                res.status(500).send({
+                    success: false,
+                    message: "Failed to submit adoption request",
+                    error: error.message,
+                });
+            }
+        });
+
+        // GET API endpoint to check if already requested for adoption
+        app.get("/adopt-request/check", verifyToken, async (req, res) => {
+            const { pet_id, user_email } = req.query;
+            if (!pet_id || !user_email) {
+                return res.status(400).send({ success: false, message: "pet_id and user_email are required" });
+            }
+            try {
+                // Check if already adopted
+                const pet = await petCollection.findOne({
+                    _id: require("mongodb").ObjectId.createFromHexString(pet_id),
+                });
+                if (pet && pet.adopted === true) {
+                    return res.send({ alreadyRequested: true, adopted: true });
+                }
+                // Check if already requested
+                const alreadyRequested = await adoptRequestsCollection.findOne({ pet_id, user_email });
+                res.send({ alreadyRequested: !!alreadyRequested, adopted: false });
+            } catch (error) {
+                res.status(500).send({
+                    success: false,
+                    message: "Failed to check adoption request",
+                    error: error.message,
+                });
             }
         });
 
