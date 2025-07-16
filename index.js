@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
 
@@ -223,12 +223,16 @@ async function run() {
                 const pet = await petCollection.findOne({
                     _id: require("mongodb").ObjectId.createFromHexString(pet_id),
                 });
+                // Prevent user from requesting adoption for their own pet
+                if (pet && pet.added_by && pet.added_by.email === user_email) {
+                    return res.send({ alreadyRequested: true, adopted: false, ownPet: true });
+                }
                 if (pet && pet.adopted === true) {
-                    return res.send({ alreadyRequested: true, adopted: true });
+                    return res.send({ alreadyRequested: true, adopted: true, ownPet: false });
                 }
                 // Check if already requested
                 const alreadyRequested = await adoptRequestsCollection.findOne({ pet_id, user_email });
-                res.send({ alreadyRequested: !!alreadyRequested, adopted: false });
+                res.send({ alreadyRequested: !!alreadyRequested, adopted: false, ownPet: false });
             } catch (error) {
                 res.status(500).send({
                     success: false,
@@ -241,9 +245,19 @@ async function run() {
         // get all pet added by user using email
         app.get("/dashboard/my-added-pets/:email", verifyToken, async (req, res) => {
             const email = req.params.email;
-            console.log(email);
             const filter = { "added_by.email": email };
             const result = await petCollection.find(filter).toArray();
+            res.send(result);
+        });
+
+        // update pet data
+        app.patch("/pet-update/:id", verifyToken, async (req, res) => {
+            const id = req.params.id;
+            const updateData = req.body;
+            updateData.last_updated = new Date().toISOString();
+            const filter = { _id: new ObjectId(id) };
+            const update = { $set: updateData };
+            const result = await petCollection.updateOne(filter, update);
             res.send(result);
         });
 
