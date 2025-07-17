@@ -250,13 +250,12 @@ async function run() {
             res.send(result);
         });
 
-        // update pet data
+        // PATCH API endpoint to update pet data
         app.patch("/pet-update/:id", verifyToken, async (req, res) => {
             const id = req.params.id;
             const updateData = req.body;
-            updateData.last_updated = new Date().toISOString();
             const filter = { _id: new ObjectId(id) };
-            const update = { $set: updateData };
+            const update = { $set: { updateData, last_updated: new Date().toISOString() } };
             const result = await petCollection.updateOne(filter, update);
             res.send(result);
         });
@@ -279,6 +278,16 @@ async function run() {
             } catch (error) {
                 res.status(500).send({ success: false, message: "Failed to delete pet", error: error.message });
             }
+        });
+
+        // Patch API for updating adoption status of pets.
+        app.patch("/adopt-status-update/:id", verifyToken, async (req, res) => {
+            const id = req.params.id;
+            // Always set adopted to true and update last_updated
+            const filter = { _id: new ObjectId(id) };
+            const update = { $set: { adopted: true, last_updated: new Date().toISOString() } };
+            const result = await petCollection.updateOne(filter, update);
+            res.send(result);
         });
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
