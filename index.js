@@ -261,6 +261,25 @@ async function run() {
             res.send(result);
         });
 
+        // DELETE API endpoint to delete a pet by its ID
+        app.delete("/dashboard/my-added-pets/:id", verifyToken, async (req, res) => {
+            const id = req.params.id;
+            const userEmail = req.user.email;
+            if (!ObjectId.isValid(id)) {
+                return res.status(400).send({ success: false, message: "Invalid pet ID" });
+            }
+            try {
+                // Only Allow delete if the pet was added by the user
+                const filter = { _id: new ObjectId(id), "added_by.email": userEmail };
+                const result = await petCollection.deleteOne(filter);
+                if (result.deletedCount === 0) {
+                    return res.status(404).send({ success: false, message: "Pet not found or not authorized" });
+                }
+                res.send({ success: true, message: "Pet deleted successfully" });
+            } catch (error) {
+                res.status(500).send({ success: false, message: "Failed to delete pet", error: error.message });
+            }
+        });
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
         // console.log("Successfully connected to MongoDB!");
