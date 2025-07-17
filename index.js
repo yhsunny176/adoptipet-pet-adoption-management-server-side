@@ -368,6 +368,23 @@ async function run() {
             });
         });
 
+        // GET API endpoint for retrieving a single campaign detail by ID
+        app.get("/donation-detail/:id", async (req, res) => {
+            const { id } = req.params;
+            if (!ObjectId.isValid(id)) {
+                return res.status(400).send({ success: false, message: "Invalid pet ID" });
+            }
+            try {
+                const pet = await donationsCollection.findOne({ _id: new ObjectId(id) });
+                if (!pet) {
+                    return res.status(404).send({ success: false, message: "Donation Campaign not found" });
+                }
+                res.send(pet);
+            } catch (error) {
+                res.status(500).send({ success: false, message: "Failed to fetch donation campaign", error: error.message });
+            }
+        });
+
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
         // console.log("Successfully connected to MongoDB!");
