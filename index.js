@@ -51,6 +51,7 @@ async function run() {
         const usersCollection = db.collection("users");
         const petCollection = db.collection("allPets");
         const adoptRequestsCollection = db.collection("adoptRequests");
+        const donationsCollection = db.collection("donationsCollection");
 
         //generate jwt
         app.post("/jwt", (req, res) => {
@@ -321,6 +322,14 @@ async function run() {
             }
 
             res.send(requestUpdate);
+        });
+
+        // POST API endpoint for Adding a pet
+        app.post("/dashboard/create-donation-campaign", verifyToken, async (req, res) => {
+            const donation = req.body;
+            donation.created_at = new Date().toISOString();
+            const result = await donationsCollection.insertOne(donation);
+            res.send(result);
         });
 
         // Send a ping to confirm a successful connection
