@@ -357,6 +357,17 @@ async function run() {
             res.send(result);
         });
 
+        // GET API endpoint for Retrieving All donation campaigns with pagination (for infinite scrolling)
+        app.get("/donation-campaigns", async (req, res) => {
+            const result = await paginateCollection({ collection: donationsCollection, req });
+            res.send({
+                donations: result.items,
+                nextId: result.nextId,
+                previousId: result.previousId,
+                total: result.total,
+            });
+        });
+
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
         // console.log("Successfully connected to MongoDB!");
