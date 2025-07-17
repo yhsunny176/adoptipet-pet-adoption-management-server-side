@@ -314,21 +314,46 @@ async function run() {
             const requestUpdate = await adoptRequestsCollection.updateOne(filter, update);
 
             // Update adopted field in petCollection
-            if (requestDoc && requestDoc.pet_id) {
-                await petCollection.updateOne(
-                    { _id: new ObjectId(requestDoc.pet_id) },
-                    { $set: { adopted: adoptedValue } }
-                );
+            if (requestDoc && id) {
+                await petCollection.updateOne({ _id: new ObjectId(id) }, { $set: { adopted: adoptedValue } });
             }
 
             res.send(requestUpdate);
         });
 
-        // POST API endpoint for Adding a pet
+        // POST API endpoint for creating a donation campaign
         app.post("/dashboard/create-donation-campaign", verifyToken, async (req, res) => {
             const donation = req.body;
             donation.created_at = new Date().toISOString();
+            donation.paused = false;
             const result = await donationsCollection.insertOne(donation);
+            res.send(result);
+        });
+
+        // GET API for campaign data by user email
+        app.get("/dashboard/my-campaign-data/:email", verifyToken, async (req, res) => {
+            const email = req.params.email;
+            const filter = { "added_by.email": email };
+            const result = await donationsCollection.find(filter).toArray();
+            res.send(result);
+        });
+
+        // GET API for single campaign data using id
+        app.get("/donation-campaign-data/:id", verifyToken, async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) };
+            const result = await donationsCollection.findOne(filter);
+            res.send(result);
+        });
+
+        // PATCH API endpoint to update pet data
+        app.patch("/update-donation-campaign/:id", verifyToken, async (req, res) => {
+            const id = req.params.id;
+            const updatedData = req.body;
+            const filter = { _id: new ObjectId(id) };
+            // Spread the updatedData fields directly into $set
+            const update = { $set: { ...updatedData, last_updated: new Date().toISOString() } };
+            const result = await donationsCollection.updateOne(filter, update);
             res.send(result);
         });
 
