@@ -201,6 +201,7 @@ async function run() {
             try {
                 request.requested_at = new Date().toISOString();
                 request.adopted = false;
+                request.adoption_status = "pending";
                 const result = await adoptRequestsCollection.insertOne(request);
                 res.send({ success: true, result });
             } catch (error) {
@@ -280,15 +281,48 @@ async function run() {
             }
         });
 
-        // Patch API for updating adoption status of pets.
-        app.patch("/adopt-status-update/:id", verifyToken, async (req, res) => {
-            const id = req.params.id;
-            // Always set adopted to true and update last_updated
-            const filter = { _id: new ObjectId(id) };
-            const update = { $set: { adopted: true, last_updated: new Date().toISOString() } };
-            const result = await petCollection.updateOne(filter, update);
+        // GET API to get all adoption requests for pets added by user
+        app.get("/dashboard/adoption-requests/:email", verifyToken, async (req, res) => {
+            const email = req.params.email;
+            const filter = { "added_by.email": email };
+            const result = await adoptRequestsCollection.find(filter).toArray();
             res.send(result);
         });
+
+        // Patch API for updating adoption status of pets.
+        app.patch("/adoption-request-update/:id", verifyToken, async (req, res) => {
+            const id = req.params.id;
+            const { adoption_status } = req.body;
+            const filter = { _id: new ObjectId(id) };
+
+            // Find the request to get pet_id
+            const requestDoc = await adoptRequestsCollection.findOne(filter);
+            let adoptedValue = false;
+            if (adoption_status === "accepted") {
+                adoptedValue = true;
+            }
+
+            // Update adoption_status and adopted in adoptRequestsCollection
+            const update = {
+                $set: {
+                    adoption_status,
+                    adopted: adoptedValue,
+                    last_updated: new Date().toISOString(),
+                },
+            };
+            const requestUpdate = await adoptRequestsCollection.updateOne(filter, update);
+
+            // Update adopted field in petCollection
+            if (requestDoc && requestDoc.pet_id) {
+                await petCollection.updateOne(
+                    { _id: new ObjectId(requestDoc.pet_id) },
+                    { $set: { adopted: adoptedValue } }
+                );
+            }
+
+            res.send(requestUpdate);
+        });
+
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
         // console.log("Successfully connected to MongoDB!");
