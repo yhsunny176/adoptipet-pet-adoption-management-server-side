@@ -434,6 +434,7 @@ async function run() {
                     user_name,
                     pet_image: pet_image,
                     email,
+                    pet_name,
                     profilepic: profilepic || null,
                     donated_at: new Date().toISOString(),
                 };
