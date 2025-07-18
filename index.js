@@ -36,6 +36,32 @@ const verifyToken = async (req, res, next) => {
     });
 };
 
+//Admin Verification
+const verifyAdmin = async (req, res, next) => {
+    const email = req?.user?.email;
+    const user = await users.findOne({
+        email,
+    });
+    console.log(user?.role);
+    if (!user || user?.role !== "admin")
+        return res.status(403).send({ message: "Only Admins can Access this!", role: user?.role });
+
+    next();
+};
+
+// User Verification
+const verifyUser = async (req, res, next) => {
+    const email = req?.user?.email;
+    const user = await users.findOne({
+        email,
+    });
+    console.log(user?.role);
+    if (!user || user?.role !== "user")
+        return res.status(403).send({ message: "Only Admins can Access this!", role: user?.role });
+
+    next();
+};
+
 // MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
     serverApi: {
@@ -83,6 +109,14 @@ async function run() {
             }
         });
 
+        // GET API for fetching a user's role
+        app.get("/user/role/:email", async (req, res) => {
+            const email = req.params.email;
+            const result = await users.findOne({ email });
+            if (!result) return res.status(404).send({ message: "User Not Found." });
+            res.send({ role: result?.role });
+        });
+
         // save or update a users info in db
         app.post("/user", async (req, res) => {
             const userData = req.body;
@@ -106,7 +140,7 @@ async function run() {
         });
 
         // POST API endpoint for Adding a pet
-        app.post("/add-pet", verifyToken, async (req, res) => {
+        app.post("/add-pet", verifyToken, verifyUser, async (req, res) => {
             const pet = req.body;
             pet.created_at = new Date().toISOString();
             const result = await petCollection.insertOne(pet);
@@ -195,7 +229,7 @@ async function run() {
         });
 
         // POST API endpoint for submitting an adoption request
-        app.post("/adopt-request", verifyToken, async (req, res) => {
+        app.post("/adopt-request", verifyToken, verifyUser, async (req, res) => {
             const request = req.body;
             if (!request.pet_id || !request.user_email) {
                 return res.status(400).send({ success: false, message: "pet_id and user_email are required" });
@@ -216,7 +250,7 @@ async function run() {
         });
 
         // GET API endpoint to check if already requested for adoption
-        app.get("/adopt-request/check", verifyToken, async (req, res) => {
+        app.get("/adopt-request/check", verifyToken, verifyUser, async (req, res) => {
             const { pet_id, user_email } = req.query;
             if (!pet_id || !user_email) {
                 return res.status(400).send({ success: false, message: "pet_id and user_email are required" });
@@ -246,7 +280,7 @@ async function run() {
         });
 
         // get all pet added by user using email
-        app.get("/dashboard/my-added-pets/:email", verifyToken, async (req, res) => {
+        app.get("/dashboard/my-added-pets/:email", verifyToken, verifyUser, async (req, res) => {
             const email = req.params.email;
             const filter = { "added_by.email": email };
             const result = await petCollection.find(filter).toArray();
@@ -254,7 +288,7 @@ async function run() {
         });
 
         // PATCH API endpoint to update pet data
-        app.patch("/pet-update/:id", verifyToken, async (req, res) => {
+        app.patch("/pet-update/:id", verifyToken, verifyUser, async (req, res) => {
             const id = req.params.id;
             const updateData = req.body;
             const filter = { _id: new ObjectId(id) };
@@ -265,7 +299,7 @@ async function run() {
         });
 
         // DELETE API endpoint to delete a pet by its ID
-        app.delete("/dashboard/my-added-pets/:id", verifyToken, async (req, res) => {
+        app.delete("/dashboard/my-added-pets/:id", verifyToken, verifyUser, async (req, res) => {
             const id = req.params.id;
             const userEmail = req.user.email;
             if (!ObjectId.isValid(id)) {
@@ -285,7 +319,7 @@ async function run() {
         });
 
         // GET API to get all adoption requests for pets added by user
-        app.get("/dashboard/adoption-requests/:email", verifyToken, async (req, res) => {
+        app.get("/dashboard/adoption-requests/:email", verifyToken, verifyUser, async (req, res) => {
             const email = req.params.email;
             const filter = { "added_by.email": email };
             const result = await adoptRequestsCollection.find(filter).toArray();
@@ -293,7 +327,7 @@ async function run() {
         });
 
         // Patch API for updating adoption status of pets.
-        app.patch("/adoption-request-update/:id", verifyToken, async (req, res) => {
+        app.patch("/adoption-request-update/:id", verifyToken, verifyUser, async (req, res) => {
             const id = req.params.id;
             const { adoption_status } = req.body;
             const filter = { _id: new ObjectId(id) };
@@ -324,7 +358,7 @@ async function run() {
         });
 
         // POST API endpoint for creating a donation campaign
-        app.post("/dashboard/create-donation-campaign", verifyToken, async (req, res) => {
+        app.post("/dashboard/create-donation-campaign", verifyToken, verifyUser, async (req, res) => {
             const donation = req.body;
             donation.created_at = new Date().toISOString();
             donation.paused = false;
@@ -333,7 +367,7 @@ async function run() {
         });
 
         // GET API for campaign data by user email
-        app.get("/dashboard/my-campaign-data/:email", verifyToken, async (req, res) => {
+        app.get("/dashboard/my-campaign-data/:email", verifyToken, verifyUser, async (req, res) => {
             const email = req.params.email;
             const filter = { "added_by.email": email };
             const result = await donationsCollection.find(filter).toArray();
@@ -341,7 +375,7 @@ async function run() {
         });
 
         // GET API for single campaign data using id
-        app.get("/donation-campaign-data/:id", verifyToken, async (req, res) => {
+        app.get("/donation-campaign-data/:id", verifyToken, verifyUser, async (req, res) => {
             const id = req.params.id;
             const filter = { _id: new ObjectId(id) };
             const result = await donationsCollection.findOne(filter);
@@ -349,7 +383,7 @@ async function run() {
         });
 
         // PATCH API endpoint to update pet data
-        app.patch("/update-donation-campaign/:id", verifyToken, async (req, res) => {
+        app.patch("/update-donation-campaign/:id", verifyToken, verifyUser, async (req, res) => {
             const id = req.params.id;
             const updatedData = req.body;
             const filter = { _id: new ObjectId(id) };
@@ -422,8 +456,8 @@ async function run() {
         });
 
         // POST API endpoint to store received donation details after successful checkout
-        app.post("/recieved-donation", verifyToken, async (req, res) => {
-            const { campaign_id, amount_donated, user_name, email, profilepic, pet_image } = req.body;
+        app.post("/recieved-donation", verifyToken, verifyUser, async (req, res) => {
+            const { campaign_id, amount_donated, user_name, email, profilepic, pet_image, pet_name } = req.body;
             if (!campaign_id || !ObjectId.isValid(campaign_id) || !amount_donated || !user_name || !email) {
                 return res.status(400).send({ success: false, message: "Required fields missing or invalid." });
             }
@@ -434,7 +468,7 @@ async function run() {
                     user_name,
                     pet_image: pet_image,
                     email,
-                    pet_name,
+                    pet_name: pet_name,
                     profilepic: profilepic || null,
                     donated_at: new Date().toISOString(),
                 };
@@ -465,7 +499,7 @@ async function run() {
         });
 
         // GET API endpoint to fetch donors for a specific campaign
-        app.get("/dashboard/donors-list/:campaignId", verifyToken, async (req, res) => {
+        app.get("/dashboard/donors-list/:campaignId", verifyToken, verifyUser, async (req, res) => {
             const campaignId = req.params.campaignId;
             if (!ObjectId.isValid(campaignId)) {
                 return res.status(400).send([]);
@@ -476,7 +510,7 @@ async function run() {
         });
 
         // GET api endpoint to fetch donations added by user using email
-        app.get("/dashboard/my-donations/:email", verifyToken, async (req, res) => {
+        app.get("/dashboard/my-donations/:email", verifyToken, verifyUser, async (req, res) => {
             const email = req.params.email;
             const filter = { email: email };
             const result = await recievedDonationCollection.find(filter).toArray();
@@ -484,7 +518,7 @@ async function run() {
         });
 
         // DELETE API endpoint to delete a donation by ID
-        app.delete("/dashboard/donation-delete/:id", verifyToken, async (req, res) => {
+        app.delete("/dashboard/donation-delete/:id", verifyToken, verifyUser, async (req, res) => {
             const id = req.params.id;
             const userEmail = req.user.email;
             if (!ObjectId.isValid(id)) {
