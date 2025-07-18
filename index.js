@@ -39,7 +39,7 @@ const verifyToken = async (req, res, next) => {
 //Admin Verification
 const verifyAdmin = async (req, res, next) => {
     const email = req?.user?.email;
-    const user = await users.findOne({
+    const user = await usersCollection.findOne({
         email,
     });
     if (!user || user?.role !== "admin")
@@ -51,7 +51,7 @@ const verifyAdmin = async (req, res, next) => {
 // User Verification
 const verifyUser = async (req, res, next) => {
     const email = req?.user?.email;
-    const user = await users.findOne({
+    const user = await usersCollection.findOne({
         email,
     });
     if (!user || user?.role !== "user")
@@ -110,7 +110,7 @@ async function run() {
         // GET API for fetching a user's role
         app.get("/user/role/:email", async (req, res) => {
             const email = req.params.email;
-            const result = await users.findOne({ email });
+            const result = await usersCollection.findOne({ email });
             if (!result) return res.status(404).send({ message: "User Not Found." });
             res.send({ role: result?.role });
         });
