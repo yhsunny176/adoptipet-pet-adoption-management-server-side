@@ -422,8 +422,8 @@ async function run() {
         });
 
         // POST API endpoint to store received donation details after successful checkout
-        app.post("/recieved-donation", async (req, res) => {
-            const { campaign_id, amount_donated, user_name, email, profilepic } = req.body;
+        app.post("/recieved-donation", verifyToken, async (req, res) => {
+            const { campaign_id, amount_donated, user_name, email, profilepic, pet_image } = req.body;
             if (!campaign_id || !ObjectId.isValid(campaign_id) || !amount_donated || !user_name || !email) {
                 return res.status(400).send({ success: false, message: "Required fields missing or invalid." });
             }
@@ -432,7 +432,7 @@ async function run() {
                     campaign_id: new ObjectId(campaign_id),
                     amount_donated: Number(amount_donated),
                     user_name,
-                    email,
+                    pet_image: pet_image,
                     profilepic: profilepic || null,
                     donated_at: new Date().toISOString(),
                 };
@@ -459,6 +459,47 @@ async function run() {
                     message: "Failed to store donation details",
                     error: error.message,
                 });
+            }
+        });
+
+        // GET API endpoint to fetch donors for a specific campaign
+        app.get("/dashboard/donors-list/:campaignId", verifyToken, async (req, res) => {
+            const campaignId = req.params.campaignId;
+            if (!ObjectId.isValid(campaignId)) {
+                return res.status(400).send([]);
+            }
+            const filter = { campaign_id: new ObjectId(campaignId) };
+            const donors = await recievedDonationCollection.find(filter).toArray();
+            res.send(donors);
+        });
+
+        // GET api endpoint to fetch donations added by user using email
+        app.get("/dashboard/my-donations/:email", verifyToken, async (req, res) => {
+            const email = req.params.email;
+            const filter = { email: email };
+            const result = await recievedDonationCollection.find(filter).toArray();
+            res.send(result);
+        });
+
+        // DELETE API endpoint to delete a donation by ID
+        app.delete("/dashboard/donation-delete/:id", verifyToken, async (req, res) => {
+            const id = req.params.id;
+            const userEmail = req.user.email;
+            if (!ObjectId.isValid(id)) {
+                return res.status(400).send({ success: false, message: "Invalid pet ID" });
+            }
+            try {
+                // Only Allow delete if the pet was added by the user
+                const filter = { _id: new ObjectId(id), email: userEmail };
+                const result = await recievedDonationCollection.deleteOne(filter);
+                if (result.deletedCount === 0) {
+                    return res
+                        .status(404)
+                        .send({ success: false, message: "No Donation with this Id found or Authorization Failed" });
+                }
+                res.send({ success: true, message: "Refunded successfully" });
+            } catch (error) {
+                res.status(500).send({ success: false, message: "Failed to Refund", error: error.message });
             }
         });
 
