@@ -433,6 +433,7 @@ async function run() {
                     amount_donated: Number(amount_donated),
                     user_name,
                     pet_image: pet_image,
+                    email,
                     profilepic: profilepic || null,
                     donated_at: new Date().toISOString(),
                 };
