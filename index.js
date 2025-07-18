@@ -42,7 +42,6 @@ const verifyAdmin = async (req, res, next) => {
     const user = await users.findOne({
         email,
     });
-    console.log(user?.role);
     if (!user || user?.role !== "admin")
         return res.status(403).send({ message: "Only Admins can Access this!", role: user?.role });
 
@@ -55,7 +54,6 @@ const verifyUser = async (req, res, next) => {
     const user = await users.findOne({
         email,
     });
-    console.log(user?.role);
     if (!user || user?.role !== "user")
         return res.status(403).send({ message: "Only Admins can Access this!", role: user?.role });
 
