@@ -4,6 +4,7 @@ const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
+const stripe = require("stripe")(process.env.STRIPE_SK);
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -28,7 +29,6 @@ const verifyToken = async (req, res, next) => {
     }
     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
         if (err) {
-            console.log(err);
             return res.status(401).send({ message: "unauthorized access" });
         }
         req.user = decoded;
@@ -52,6 +52,7 @@ async function run() {
         const petCollection = db.collection("allPets");
         const adoptRequestsCollection = db.collection("adoptRequests");
         const donationsCollection = db.collection("donationsCollection");
+        const recievedDonationCollection = db.collection("recievedDonationCollection");
 
         //generate jwt
         app.post("/jwt", (req, res) => {
@@ -257,7 +258,8 @@ async function run() {
             const id = req.params.id;
             const updateData = req.body;
             const filter = { _id: new ObjectId(id) };
-            const update = { $set: { updateData, last_updated: new Date().toISOString() } };
+            // Spread the updateData fields directly into $set
+            const update = { $set: { ...updateData, last_updated: new Date().toISOString() } };
             const result = await petCollection.updateOne(filter, update);
             res.send(result);
         });
@@ -372,16 +374,91 @@ async function run() {
         app.get("/donation-detail/:id", async (req, res) => {
             const { id } = req.params;
             if (!ObjectId.isValid(id)) {
-                return res.status(400).send({ success: false, message: "Invalid pet ID" });
+                return res.status(400).send({ success: false, message: "Invalid Donation ID" });
             }
             try {
-                const pet = await donationsCollection.findOne({ _id: new ObjectId(id) });
-                if (!pet) {
+                const donation = await donationsCollection.findOne({ _id: new ObjectId(id) });
+                if (!donation) {
                     return res.status(404).send({ success: false, message: "Donation Campaign not found" });
                 }
-                res.send(pet);
+                res.send(donation);
             } catch (error) {
-                res.status(500).send({ success: false, message: "Failed to fetch donation campaign", error: error.message });
+                res.status(500).send({
+                    success: false,
+                    message: "Failed to fetch donation campaign",
+                    error: error.message,
+                });
+            }
+        });
+
+        app.post("/create-payment-intent", async (req, res) => {
+            const { _id, amount } = req.body;
+            if (!ObjectId.isValid(_id)) {
+                return res.status(400).send({ success: false, message: "Invalid Campaign ID" });
+            }
+            if (!amount || isNaN(amount) || Number(amount) <= 0) {
+                return res.status(400).send({ success: false, message: "Invalid amount" });
+            }
+            try {
+                const donCampaign = await donationsCollection.findOne({ _id: new ObjectId(_id) });
+                if (!donCampaign) {
+                    return res.status(404).send({ success: false, message: "Donation Campaign not found" });
+                }
+                const paymentIntent = await stripe.paymentIntents.create({
+                    amount: Math.round(Number(amount) * 100),
+                    currency: "usd",
+                    automatic_payment_methods: {
+                        enabled: true,
+                    },
+                });
+                res.send({ clientSecret: paymentIntent.client_secret });
+            } catch (error) {
+                res.status(500).send({
+                    success: false,
+                    message: "Failed to create payment intent",
+                    error: error.message,
+                });
+            }
+        });
+
+        // POST API endpoint to store received donation details after successful checkout
+        app.post("/recieved-donation", async (req, res) => {
+            const { campaign_id, amount_donated, user_name, email, profilepic } = req.body;
+            if (!campaign_id || !ObjectId.isValid(campaign_id) || !amount_donated || !user_name || !email) {
+                return res.status(400).send({ success: false, message: "Required fields missing or invalid." });
+            }
+            try {
+                const donationDoc = {
+                    campaign_id: new ObjectId(campaign_id),
+                    amount_donated: Number(amount_donated),
+                    user_name,
+                    email,
+                    profilepic: profilepic || null,
+                    donated_at: new Date().toISOString(),
+                };
+                const result = await recievedDonationCollection.insertOne(donationDoc);
+
+                // Sum all donations for this campaign
+                const agg = await recievedDonationCollection
+                    .aggregate([
+                        { $match: { campaign_id: new ObjectId(campaign_id) } },
+                        { $group: { _id: "$campaign_id", total: { $sum: "$amount_donated" } } },
+                    ])
+                    .toArray();
+                const totalDonations = agg.length > 0 ? agg[0].total : 0;
+                // Update campaign total_donations field
+                await donationsCollection.updateOne(
+                    { _id: new ObjectId(campaign_id) },
+                    { $set: { total_donations: totalDonations } }
+                );
+
+                res.send({ success: true, result, total_donations: totalDonations });
+            } catch (error) {
+                res.status(500).send({
+                    success: false,
+                    message: "Failed to store donation details",
+                    error: error.message,
+                });
             }
         });
 
