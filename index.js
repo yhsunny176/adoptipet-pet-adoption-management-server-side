@@ -311,8 +311,9 @@ async function run() {
         // PATCH API endpoint to update pet data
         app.patch("/pet-update/:id", verifyToken, verifyUserOrAdmin, async (req, res) => {
             const id = req.params.id;
+            const userEmail = req.user.email;
             const updateData = req.body;
-            const filter = { _id: new ObjectId(id) };
+            const filter = { _id: new ObjectId(id), "added_by.email": userEmail };
             // Spread the updateData fields directly into $set
             const update = { $set: { ...updateData, last_updated: new Date().toISOString() } };
             const result = await petCollection.updateOne(filter, update);
@@ -347,7 +348,7 @@ async function run() {
             res.send(result);
         });
 
-        // Patch API for updating adoption status of pets.
+        // Patch API for updating adoption request of pets.
         app.patch("/adoption-request-update/:id", verifyToken, verifyUserOrAdmin, async (req, res) => {
             const id = req.params.id;
             const { adoption_status } = req.body;
@@ -376,6 +377,53 @@ async function run() {
             }
 
             res.send(requestUpdate);
+        });
+
+        // Patch API for updating adoption status of pets.
+        app.patch("/adopt-status-update/:id", verifyToken, verifyUserOrAdmin, async (req, res) => {
+            const id = req.params.id;
+            const { adopted } = req.body || {};
+            const userEmail = req.user.email;
+            const filter = { _id: new ObjectId(id), "added_by.email": userEmail };
+
+            let adoptedValue = false;
+            if (adopted === true) {
+                adoptedValue = true;
+            }
+
+            // Update adopted field in petCollection
+            const update = {
+                $set: {
+                    adopted: adoptedValue,
+                    last_updated: new Date().toISOString(),
+                },
+            };
+            try {
+                const statusUpdate = await petCollection.updateOne(filter, update);
+
+                // Only update adoptRequestsCollection if pet_id exists
+                const requestExists = await adoptRequestsCollection.findOne({ pet_id: id });
+                let requestUpdate = null;
+                if (requestExists) {
+                    requestUpdate = await adoptRequestsCollection.updateMany(
+                        { pet_id: id },
+                        {
+                            $set: {
+                                adopted: adoptedValue,
+                                adoption_status: "accepted",
+                                last_updated: new Date().toISOString(),
+                            },
+                        }
+                    );
+                }
+                res.send({ petUpdate: statusUpdate, adoptionRequestUpdate: requestUpdate });
+            } catch (error) {
+                res.status(500).send({
+                    success: false,
+                    message: "Failed to update adoption status",
+                    error: error.message,
+                });
+            }
         });
 
         // POST API endpoint for creating a donation campaign
@@ -557,6 +605,104 @@ async function run() {
                 res.send({ success: true, message: "Refunded successfully" });
             } catch (error) {
                 res.status(500).send({ success: false, message: "Failed to Refund", error: error.message });
+            }
+        });
+
+        // GET API endpoint for Retrieving All pets (Admin Only)
+        app.get("/admin/all-pets", verifyToken, verifyAdmin, async (req, res) => {
+            try {
+                const result = await petCollection.find().toArray();
+                res.send(result);
+            } catch (error) {
+                res.status(500).send({ message: "Failed to retrieve pets", error: error.message });
+            }
+        });
+
+        // DELETE API endpoint to delete a pet by its ID (Admin Only)
+        app.delete("/admin/all-pets/:id", verifyToken, verifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            if (!ObjectId.isValid(id)) {
+                return res.status(400).send({ success: false, message: "Invalid pet ID" });
+            }
+            try {
+                const result = await petCollection.deleteOne();
+                if (result.deletedCount === 0) {
+                    return res.status(404).send({ success: false, message: "Pet not found or not authorized" });
+                }
+                res.send({ success: true, message: "Pet deleted successfully" });
+            } catch (error) {
+                res.status(500).send({ success: false, message: "Failed to delete pet", error: error.message });
+            }
+        });
+
+        // Patch API for updating adoption status of pets.
+        app.patch("/admin/adopt-status-update/:id", verifyToken, verifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            const { adopted, adoption_status } = req.body || {};
+            const filter = { _id: new ObjectId(id) };
+
+            let adoptedValue = false;
+            if (adopted === true) {
+                adoptedValue = true;
+            }
+
+            // Determine adoption_status to set in adoptRequestsCollection
+            let statusToSet = adoption_status;
+            if (!statusToSet) {
+                statusToSet = adoptedValue ? "accepted" : "pending";
+            }
+
+            // Update adopted field in petCollection
+            const update = {
+                $set: {
+                    adopted: adoptedValue,
+                    last_updated: new Date().toISOString(),
+                },
+            };
+            try {
+                const statusUpdate = await petCollection.updateOne(filter, update);
+
+                // Only update adoptRequestsCollection if pet_id exists
+                const requestExists = await adoptRequestsCollection.findOne({ pet_id: id });
+                let requestUpdate = null;
+                if (requestExists) {
+                    requestUpdate = await adoptRequestsCollection.updateMany(
+                        { pet_id: id },
+                        {
+                            $set: {
+                                adopted: adoptedValue,
+                                adoption_status: statusToSet,
+                                last_updated: new Date().toISOString(),
+                            },
+                        }
+                    );
+                }
+                res.send({ petUpdate: statusUpdate, adoptionRequestUpdate: requestUpdate });
+            } catch (error) {
+                res.status(500).send({
+                    success: false,
+                    message: "Failed to update adoption status",
+                    error: error.message,
+                });
+            }
+        });
+
+        // DELETE API endpoint to delete a pet by its ID
+        app.delete("/admin/dashboard/delete-pet/:id", verifyToken, verifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            if (!ObjectId.isValid(id)) {
+                return res.status(400).send({ success: false, message: "Invalid pet ID" });
+            }
+            try {
+                // Only Allow delete if the pet was added by the user
+                const filter = { _id: new ObjectId(id) };
+                const result = await petCollection.deleteOne(filter);
+                if (result.deletedCount === 0) {
+                    return res.status(404).send({ success: false, message: "Pet not found or not authorized" });
+                }
+                res.send({ success: true, message: "Pet deleted successfully" });
+            } catch (error) {
+                res.status(500).send({ success: false, message: "Failed to delete pet", error: error.message });
             }
         });
 
