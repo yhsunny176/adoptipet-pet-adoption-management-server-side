@@ -451,7 +451,7 @@ async function run() {
             res.send(result);
         });
 
-        // PATCH API endpoint to update pet data
+        // PATCH API endpoint to update donation campaign data
         app.patch("/update-donation-campaign/:id", verifyToken, verifyUserOrAdmin, async (req, res) => {
             const id = req.params.id;
             const updatedData = req.body;
@@ -704,6 +704,50 @@ async function run() {
             } catch (error) {
                 res.status(500).send({ success: false, message: "Failed to delete pet", error: error.message });
             }
+        });
+
+        // GET API endpoint for Retrieving All Donations by User (Admin Only)
+        app.get("/admin/dashboard/all-donations", verifyToken, verifyAdmin, async (req, res) => {
+            try {
+                const result = await recievedDonationCollection.find().toArray();
+                res.send(result);
+            } catch (error) {
+                res.status(500).send({ message: "Failed to retrieve donations", error: error.message });
+            }
+        });
+
+        // DELETE API endpoint to delete a Donation Campaign by its ID (Admin Only)
+        app.delete("/admin/all-donations/:id", verifyToken, verifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            if (!ObjectId.isValid(id)) {
+                return res.status(400).send({ success: false, message: "Invalid donation camapign ID" });
+            }
+            try {
+                const result = await donationsCollection.deleteOne();
+                if (result.deletedCount === 0) {
+                    return res
+                        .status(404)
+                        .send({ success: false, message: "Donation Campaign not found or not authorized" });
+                }
+                res.send({ success: true, message: "Donation Campaign deleted successfully" });
+            } catch (error) {
+                res.status(500).send({
+                    success: false,
+                    message: "Failed to delete Donation Campaign",
+                    error: error.message,
+                });
+            }
+        });
+
+        // PATCH API endpoint to update Donation Campaign by Admin
+        app.patch("/admin/update-donation-campaign/:id", verifyToken, verifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            const updatedData = req.body;
+            const filter = { _id: new ObjectId(id) };
+            // Spread the updatedData fields directly into $set
+            const update = { $set: { ...updatedData, last_updated: new Date().toISOString() } };
+            const result = await donationsCollection.updateOne(filter, update);
+            res.send(result);
         });
 
         // Send a ping to confirm a successful connection
