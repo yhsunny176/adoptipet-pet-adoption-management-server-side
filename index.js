@@ -709,7 +709,7 @@ async function run() {
         // GET API endpoint for Retrieving All Donations by User (Admin Only)
         app.get("/admin/dashboard/all-donations", verifyToken, verifyAdmin, async (req, res) => {
             try {
-                const result = await recievedDonationCollection.find().toArray();
+                const result = await donationsCollection.find().toArray();
                 res.send(result);
             } catch (error) {
                 res.status(500).send({ message: "Failed to retrieve donations", error: error.message });
@@ -717,7 +717,7 @@ async function run() {
         });
 
         // DELETE API endpoint to delete a Donation Campaign by its ID (Admin Only)
-        app.delete("/admin/all-donations/:id", verifyToken, verifyAdmin, async (req, res) => {
+        app.delete("/admin/delete-donation-campaign/:id", verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
             if (!ObjectId.isValid(id)) {
                 return res.status(400).send({ success: false, message: "Invalid donation camapign ID" });
