@@ -5,6 +5,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
 const stripe = require("stripe")(process.env.STRIPE_SK);
+const { getPetRecommendations, getAdvancedPetRecommendations } = require("./routes/petRecommendations");
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -15,6 +16,7 @@ const corsOptions = {
     credentials: true,
     optionSuccessStatus: 200,
 };
+
 app.use(cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json());
@@ -248,6 +250,12 @@ async function run() {
                 res.status(500).send({ success: false, message: "Failed to fetch pets", error: error.message });
             }
         });
+
+        // GET API endpoint for pet recommendations
+        app.get("/pet-recommendations", verifyToken, getPetRecommendations(petCollection));
+        
+        // GET API endpoint for advanced pet recommendations
+        app.get("/pet-recommendations/advanced", verifyToken, getAdvancedPetRecommendations(petCollection));
 
         // POST API endpoint for submitting an adoption request
         app.post("/adopt-request", verifyToken, verifyUserOrAdmin, async (req, res) => {
