@@ -634,7 +634,7 @@ async function run() {
                 return res.status(400).send({ success: false, message: "Invalid pet ID" });
             }
             try {
-                const result = await petCollection.deleteOne();
+                const result = await petCollection.deleteOne({ _id: new ObjectId(id) });
                 if (result.deletedCount === 0) {
                     return res.status(404).send({ success: false, message: "Pet not found or not authorized" });
                 }
@@ -732,7 +732,7 @@ async function run() {
                 return res.status(400).send({ success: false, message: "Invalid donation camapign ID" });
             }
             try {
-                const result = await donationsCollection.deleteOne();
+                const result = await donationsCollection.deleteOne({ _id: new ObjectId(id) });
                 if (result.deletedCount === 0) {
                     return res
                         .status(404)
