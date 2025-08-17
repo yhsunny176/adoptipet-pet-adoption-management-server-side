@@ -5,7 +5,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
 const stripe = require("stripe")(process.env.STRIPE_SK);
-const { getPetRecommendations, getAdvancedPetRecommendations } = require("./routes/petRecommendations");
+const { getPetRecommendations, getAdvancedPetRecommendations } = require("./petRecommendations");
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -55,6 +55,7 @@ async function run() {
         const adoptRequestsCollection = db.collection("adoptRequests");
         const donationsCollection = db.collection("donationsCollection");
         const recievedDonationCollection = db.collection("recievedDonationCollection");
+        const reviewsCollection = db.collection("reviews");
 
         //Admin Verification
         const verifyAdmin = async (req, res, next) => {
@@ -253,7 +254,7 @@ async function run() {
 
         // GET API endpoint for pet recommendations
         app.get("/pet-recommendations", verifyToken, getPetRecommendations(petCollection));
-        
+
         // GET API endpoint for advanced pet recommendations
         app.get("/pet-recommendations/advanced", verifyToken, getAdvancedPetRecommendations(petCollection));
 
@@ -756,6 +757,100 @@ async function run() {
             const update = { $set: { ...updatedData, last_updated: new Date().toISOString() } };
             const result = await donationsCollection.updateOne(filter, update);
             res.send(result);
+        });
+
+        // GET API endpoint to check if user has already submitted a review
+        app.get("/check-user-review/:email", verifyToken, verifyUserOrAdmin, async (req, res) => {
+            const email = req.params.email;
+            if (!email) {
+                return res.status(400).send({ success: false, message: "Email is required" });
+            }
+            try {
+                const existingReview = await reviewsCollection.findOne({
+                    userEmail: email,
+                    status: "active"
+                });
+                res.send({
+                    success: true,
+                    hasReviewed: !!existingReview,
+                    review: existingReview || null
+                });
+            } catch (error) {
+                res.status(500).send({
+                    success: false,
+                    message: "Failed to check user review",
+                    error: error.message,
+                });
+            }
+        });
+
+        // POST API endpoint for submitting a review
+        app.post("/submit-review", verifyToken, verifyUserOrAdmin, async (req, res) => {
+            const review = req.body;
+            if (!review.rating || !review.comment || !review.userId || !review.userEmail) {
+                return res.status(400).send({ success: false, message: "Rating, comment, userId, and userEmail are required" });
+            }
+            try {
+                // Check if user has already submitted a review
+                const existingReview = await reviewsCollection.findOne({
+                    userEmail: review.userEmail,
+                    status: "active"
+                });
+                
+                if (existingReview) {
+                    return res.status(409).send({
+                        success: false,
+                        message: "You have already submitted a review. Only one review per user is allowed."
+                    });
+                }
+
+                review.created_at = new Date().toISOString();
+                review.status = "active"; // Reviews are active by default
+                const result = await reviewsCollection.insertOne(review);
+                res.send({ success: true, result });
+            } catch (error) {
+                res.status(500).send({
+                    success: false,
+                    message: "Failed to submit review",
+                    error: error.message,
+                });
+            }
+        });
+
+        // GET API endpoint for retrieving all reviews with pagination
+        app.get("/reviews", async (req, res) => {
+            try {
+                const { page = 1, limit = 10, status = "active" } = req.query;
+                const skip = (parseInt(page) - 1) * parseInt(limit);
+
+                const filter = { status };
+
+                const reviews = await reviewsCollection
+                    .find(filter)
+                    .sort({ created_at: -1 })
+                    .skip(skip)
+                    .limit(parseInt(limit))
+                    .toArray();
+
+                const total = await reviewsCollection.countDocuments(filter);
+
+                res.send({
+                    reviews,
+                    pagination: {
+                        currentPage: parseInt(page),
+                        totalPages: Math.ceil(total / parseInt(limit)),
+                        totalReviews: total,
+                        hasNextPage: skip + parseInt(limit) < total,
+                        hasPrevPage: parseInt(page) > 1,
+                    },
+                });
+            } catch (error) {
+                res.status(500).send({
+                    success: false,
+                    message: "Failed to fetch reviews",
+                    error: error.message,
+                });
+            }
         });
 
         // Send a ping to confirm a successful connection
