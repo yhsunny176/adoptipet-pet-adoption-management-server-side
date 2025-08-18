@@ -127,6 +127,65 @@ async function run() {
             res.send({ role: result?.role });
         });
 
+        // GET API for fetching a user's profile data
+        app.get("/user/profile/:email", verifyToken, verifyUserOrAdmin, async (req, res) => {
+            const email = req.params.email;
+            try {
+                const user = await usersCollection.findOne({ email });
+                if (!user) {
+                    return res.status(404).send({ success: false, message: "User not found" });
+                }
+                // Remove sensitive information before sending
+                const { password, ...userProfile } = user;
+                res.send({ success: true, user: userProfile });
+            } catch (error) {
+                res.status(500).send({
+                    success: false,
+                    message: "Failed to fetch user profile",
+                    error: error.message,
+                });
+            }
+        });
+
+        // PATCH API for updating user profile data
+        app.patch("/user/profile/:email", verifyToken, verifyUserOrAdmin, async (req, res) => {
+            const email = req.params.email;
+            const updateData = req.body;
+            
+            try {
+                // Only allow updating specific fields
+                const allowedFields = ['name', 'profilepic'];
+                const filteredData = {};
+                
+                allowedFields.forEach(field => {
+                    if (updateData[field] !== undefined) {
+                        filteredData[field] = updateData[field];
+                    }
+                });
+                
+                if (Object.keys(filteredData).length === 0) {
+                    return res.status(400).send({ success: false, message: "No valid fields to update" });
+                }
+                
+                const result = await usersCollection.updateOne(
+                    { email },
+                    { $set: { ...filteredData, last_updated: new Date().toISOString() } }
+                );
+                
+                if (result.matchedCount === 0) {
+                    return res.status(404).send({ success: false, message: "User not found" });
+                }
+                
+                res.send({ success: true, message: "Profile updated successfully", result });
+            } catch (error) {
+                res.status(500).send({
+                    success: false,
+                    message: "Failed to update profile",
+                    error: error.message,
+                });
+            }
+        });
+
         // save or update a users info in db
         app.post("/user", async (req, res) => {
             const userData = req.body;
